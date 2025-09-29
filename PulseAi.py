@@ -68,5 +68,5 @@ with gr.Blocks() as demo:
 
     submit_button.click(pulse_ai_response, inputs=disease_input, outputs=recommendation_output)
 
-# ------------------ Launch The Application ------------------
+# ------------------ Launch Application ------------------
 demo.launch()
