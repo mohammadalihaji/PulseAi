@@ -7,7 +7,10 @@ import sys
 app = Flask(__name__, static_folder='.', static_url_path='')
 
 # ------------------ Gemini API Key ------------------
-API_KEY = 'AIzaSyCTWfbbc1Lrzvd2QsPl3fTkXyzsMQS7KXc'  # <-- Replace with your actual key
+API_KEY = os.environ.get("API_KEY")
+if not API_KEY:
+    print("🚨 API_KEY is not set!")
+    sys.exit(1)  # <-- Replace with your actual key
 
 if not API_KEY or API_KEY == 'YOUR_GEMINI_API_KEY':
     print("="*80)
