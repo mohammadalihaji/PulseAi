@@ -4,6 +4,7 @@ import google.generativeai as genai
 # ------------------ Gemini API Key ------------------
 API_KEY = 'AIzaSyCTWfbbc1Lrzvd2QsPl3fTkXyzsMQS7KXc'
 
+
 # ------------------ Initialization ------------------
 MODEL_NAME = "gemini-2.5-flash"
 MODEL = None
@@ -58,9 +59,18 @@ def done_status(_):
     return "✅ Done!"
 
 # ------------------ Gradio UI ------------------
-with gr.Blocks() as demo:
-    gr.Markdown("<h1 style='text-align:center; color:#00a99d;'>PulseAI</h1>")
-    gr.Markdown("<p style='text-align:center; color:gray;'>AI-Powered Health & Diet Recommendations</p>")
+with gr.Blocks(css="""
+    body {background-color: #f4f7f9; font-family: 'Segoe UI', sans-serif;}
+    #header {font-size: 2.2em; font-weight: 700; color: #00a99d; margin-bottom: 0;}
+    #subheader {font-size: 1em; color: gray; margin-top: 0; margin-bottom: 20px;}
+    #disease_input {border-radius: 12px; border: 1px solid #ddd; padding: 10px;}
+    #get_plan_btn {background-color: #00a99d; color: white; font-weight: bold; border-radius: 12px;}
+    #status_msg {font-style: italic; color: #555; margin-top: 10px; margin-bottom: 10px;}
+    .gr-markdown {background-color: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.05);}
+""") as demo:
+
+    gr.Markdown("<h1 id='header'>PulseAI</h1>")
+    gr.Markdown("<p id='subheader'>AI-Powered Health & Diet Recommendations</p>")
 
     with gr.Row():
         disease_input = gr.Textbox(
@@ -71,12 +81,11 @@ with gr.Blocks() as demo:
         )
         submit_button = gr.Button("Get Plan", elem_id="get_plan_btn")
 
-    with gr.Row():
-        status_msg = gr.Markdown("⏳ Waiting for input...", elem_id="status_msg")
-    
-    recommendation_output = gr.Markdown()  # ✅ Markdown instead of Textbox
+    status_msg = gr.Markdown("⏳ Waiting for input...", elem_id="status_msg")
 
-    # Update status -> Run AI -> Show Done
+    recommendation_output = gr.Markdown()
+
+    # Chain actions
     submit_button.click(
         show_status,
         inputs=disease_input,
