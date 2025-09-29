@@ -21,6 +21,7 @@ def pulse_ai_response(disease):
 
     prompt = f"""
 You are a helpful AI health assistant named PulseAI.
+
 A user will tell you their disease or health condition.
 
 Provide a **plain text**, **easy-to-read output** with **line breaks**.
@@ -79,5 +80,5 @@ with gr.Blocks() as demo:
 
     submit_button.click(pulse_ai_response, inputs=disease_input, outputs=recommendation_output)
 
-# ------------------ Launch App ------------------
+# ------------------ Launch The Application ------------------
 demo.launch()
