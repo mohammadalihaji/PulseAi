@@ -22,39 +22,31 @@ def pulse_ai_response(disease):
     prompt = f"""
 You are a helpful AI health assistant named PulseAI.
 
-A user will tell you their disease or health condition.
+Format the response in clean **Markdown** with bold section titles.
 
-Provide a **plain text**, **easy-to-read output** with **line breaks**.
-Do not return JSON, proto objects, or Markdown formatting.
-Use bullet points, but **after each bullet, add a short explanation** in simple words.
-Make it like a friendly Word-style outline, not a table or numbered blocks.
+Sections:
 
-Structure:
+**🚫 Things to Avoid**
+- Each bullet with a short explanation.
 
-🚫 Things to Avoid
-- Bullet points with a short explanation after each item.
+**✅ Recovery Actions**
+- Each bullet with a short explanation.
 
-✅ Recovery Actions
-- Bullet points with a short explanation after each item.
+**📅 Daily Life Advice**
+- Each bullet with a short explanation.
 
-📅 Daily Life Advice
-- Bullet points with a short explanation after each item.
-
-🍽️ Sample 1-Day Diet Plan for Recovery
-- Breakfast, Lunch, Snacks, Dinner each as bullet points with short explanation.
+**🍽️ Sample 1-Day Diet Plan for Recovery**
+- **Breakfast:** ...
+- **Lunch:** ...
+- **Snacks:** ...
+- **Dinner:** ...
 
 Disease/Condition: {disease}
 """
 
-
     try:
         response = MODEL.generate_content(prompt)
-        # Convert to plain text
-        output_text = str(response.candidates[0].content)
-        # Replace unnecessary symbols or extra formatting if any
-        output_text = output_text.replace("* ", "").replace("-", "")
-        return output_text.strip()
-
+        return response.text.strip()
     except Exception as e:
         return f"Gemini API Call Failed: {e}"
 
@@ -72,11 +64,7 @@ with gr.Blocks() as demo:
         )
         submit_button = gr.Button("Get Plan", elem_id="get_plan_btn")
 
-    recommendation_output = gr.Textbox(
-        label="Your Recommendation:",
-        placeholder="PulseAI will provide your health and diet advice here...",
-        lines=25
-    )
+    recommendation_output = gr.Markdown()  # ✅ Markdown instead of Textbox
 
     submit_button.click(pulse_ai_response, inputs=disease_input, outputs=recommendation_output)
 
