@@ -17,7 +17,7 @@ except Exception as e:
 # ------------------ PulseAI Function ------------------
 def pulse_ai_response(disease):
     if MODEL is None:
-        return "Error: Gemini API initialization failed. Please check your API key and console for details."
+        return "❌ Error: Gemini API initialization failed. Please check your API key and console for details."
 
     prompt = f"""
 You are a helpful AI health assistant named PulseAI.
@@ -48,7 +48,14 @@ Disease/Condition: {disease}
         response = MODEL.generate_content(prompt)
         return response.text.strip()
     except Exception as e:
-        return f"Gemini API Call Failed: {e}"
+        return f"❌ Gemini API Call Failed: {e}"
+
+# ------------------ Status Helpers ------------------
+def show_status(_):
+    return "⚡ Generating your personalized health plan... please wait!"
+
+def done_status(_):
+    return "✅ Done!"
 
 # ------------------ Gradio UI ------------------
 with gr.Blocks() as demo:
@@ -64,9 +71,25 @@ with gr.Blocks() as demo:
         )
         submit_button = gr.Button("Get Plan", elem_id="get_plan_btn")
 
+    with gr.Row():
+        status_msg = gr.Markdown("⏳ Waiting for input...", elem_id="status_msg")
+    
     recommendation_output = gr.Markdown()  # ✅ Markdown instead of Textbox
 
-    submit_button.click(pulse_ai_response, inputs=disease_input, outputs=recommendation_output)
+    # Update status -> Run AI -> Show Done
+    submit_button.click(
+        show_status,
+        inputs=disease_input,
+        outputs=status_msg
+    ).then(
+        pulse_ai_response,
+        inputs=disease_input,
+        outputs=recommendation_output
+    ).then(
+        done_status,
+        inputs=disease_input,
+        outputs=status_msg
+    )
 
-# ------------------ Launch Application ------------------
+# ------------------ Launch The Application ------------------
 demo.launch()
