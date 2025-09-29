@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PulseAI: Health & Diet Chatbot</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use Inter font -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            transition: all 0.3s ease;
+        }
+        .pulse-gradient {
+            background: linear-gradient(90deg, #10b981, #06b6d4);
+        }
+        .loading-dot {
+            animation: pulse 1s infinite;
+        }
+        .dot-2 { animation-delay: 0.2s; }
+        .dot-3 { animation-delay: 0.4s; }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.2; }
+            50% { opacity: 1; }
+        }
+        /* Custom scrollbar for the response area */
+        .response-scroll::-webkit-scrollbar {
+            width: 8px;
+        }
+        .response-scroll::-webkit-scrollbar-thumb {
+            background-color: #9ca3af;
+            border-radius: 20px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-start justify-center p-4 sm:p-8">
+
+    <div id="app-container" class="w-full max-w-4xl bg-white shadow-2xl rounded-xl overflow-hidden p-6 md:p-10 border border-gray-100">
+
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-5xl font-extrabold pulse-gradient bg-clip-text text-transparent">
+                PulseAI
+            </h1>
+            <p class="text-gray-500 mt-2 text-lg">AI-Powered Health & Diet Recommendations</p>
+        </header>
+
+        <!-- Input Section -->
+        <section class="mb-8">
+            <div class="flex flex-col sm:flex-row gap-3">
+                <input
+                    type="text"
+                    id="disease-input"
+                    placeholder="Enter your disease or ailment (e.g., 'Hypertension', 'Flu', 'Iron Deficiency')"
+                    class="flex-grow p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-lg shadow-sm"
+                    onkeypress="if(event.key === 'Enter') generateRecommendations()"
+                >
+                <button
+                    id="submit-btn"
+                    onclick="generateRecommendations()"
+                    class="pulse-gradient text-white font-semibold py-4 px-8 rounded-lg shadow-lg hover:shadow-xl transition duration-300 ease-in-out transform hover:scale-[1.02] text-lg"
+                >
+                    Get Plan
+                </button>
+            </div>
+            <p id="error-message" class="text-red-500 mt-2 text-sm hidden"></p>
+        </section>
+
+        <!-- Output Section -->
+        <section>
+            <h2 class="text-2xl font-bold text-gray-700 mb-4 border-b pb-2">Your Recommendation:</h2>
+
+            <!-- Loading Indicator -->
+            <div id="loading-indicator" class="hidden text-center py-12">
+                <div class="flex justify-center items-center space-x-2">
+                    <div class="w-4 h-4 bg-teal-500 rounded-full loading-dot"></div>
+                    <div class="w-4 h-4 bg-teal-500 rounded-full loading-dot dot-2"></div>
+                    <div class="w-4 h-4 bg-teal-500 rounded-full loading-dot dot-3"></div>
+                </div>
+                <p class="text-gray-600 mt-4 text-lg">Generating personalized, science-backed plan...</p>
+            </div>
+
+            <!-- Response Container -->
+            <div id="response-container" class="hidden min-h-[300px] max-h-[70vh] overflow-y-auto response-scroll p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <!-- LLM content will be inserted here -->
+            </div>
+
+            <!-- Citation Container -->
+            <div id="citation-container" class="mt-4 p-3 bg-blue-50 border-l-4 border-blue-400 rounded-md text-sm text-gray-700 hidden">
+                <p class="font-semibold text-blue-800 mb-1">🔍 Grounded Sources:</p>
+                <ul id="citations-list" class="list-disc ml-5 space-y-1">
+                    <!-- Citations will be inserted here -->
+                </ul>
+            </div>
+
+        </section>
+
+    </div>
+
+    <script type="module">
+        // Gemini API Configuration
+        const MODEL_NAME = "gemini-2.5-flash-preview-05-20";
+        const API_KEY = ""; // Canvas will provide this at runtime
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
+        const MAX_RETRIES = 3;
+
+        const inputEl = document.getElementById('disease-input');
+        const submitBtn = document.getElementById('submit-btn');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const responseContainer = document.getElementById('response-container');
+        const errorMessage = document.getElementById('error-message');
+        const citationContainer = document.getElementById('citation-container');
+        const citationsList = document.getElementById('citations-list');
+
+        /**
+         * System instruction defining the chatbot's role and enforcing the three-part structured response.
+         */
+        const SYSTEM_PROMPT = `You are PulseAI, an expert health and diet recommendation chatbot, grounded in factual, current medical and nutritional knowledge. Your sole purpose is to provide clear, actionable advice structured in exactly three sections. The user will provide a disease or ailment. Respond ONLY in Markdown format and ensure all advice is scientifically sound and up-to-date.
+
+Your response MUST follow this exact three-part structure:
+
+# 1. 🚫 What to AVOID (Diet & Lifestyle)
+Provide a list of specific foods, drinks, or activities that must be avoided or strictly limited to prevent worsening the condition or hindering recovery.
+
+# 2. ✅ Daily Recovery Actions (Food & Routine)
+Provide a list of actionable steps. This includes healthy food groups to prioritize and specific daily life routines (like exercise type, sleep hygiene, or hydration goals) that actively aid recovery.
+
+# 3. 🗓️ Recommended Diet Plan (Sample 3-Day Structure)
+Provide a structured, sample 3-day meal plan (Breakfast, Lunch, Dinner, Snacks) designed to help the user recover quickly from the specified ailment. Be specific with ingredients and portion advice where possible.`;
+
+        /**
+         * Utility function for fetching with exponential backoff and retries.
+         * @param {string} url - The API URL.
+         * @param {object} options - Fetch options (method, headers, body).
+         * @returns {Promise<Response>} The response object.
+         */
+        async function fetchWithRetry(url, options) {
+            for (let i = 0; i < MAX_RETRIES; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.status === 429 && i < MAX_RETRIES - 1) {
+                        const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                        console.warn(`Rate limit hit. Retrying in ${delay.toFixed(0)}ms...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        continue;
+                    }
+                    if (!response.ok) {
+                        const errorBody = await response.text();
+                        throw new Error(`API request failed with status ${response.status}: ${errorBody}`);
+                    }
+                    return response;
+                } catch (error) {
+                    console.error(`Attempt ${i + 1} failed: `, error);
+                    if (i === MAX_RETRIES - 1) throw error;
+                    const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                    console.log(`Retrying in ${delay.toFixed(0)}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        /**
+         * Calls the Gemini API with the disease query and required system instruction/grounding.
+         */
+        async function callGeminiApi(disease) {
+            const payload = {
+                contents: [{ parts: [{ text: disease }] }],
+                // Enable Google Search grounding for factual, up-to-date advice
+                tools: [{ "google_search": {} }],
+                systemInstruction: {
+                    parts: [{ text: SYSTEM_PROMPT }]
+                },
+            };
+
+            const options = {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            };
+
+            const response = await fetchWithRetry(API_URL, options);
+            const result = await response.json();
+
+            const candidate = result.candidates?.[0];
+
+            if (!candidate || !candidate.content?.parts?.[0]?.text) {
+                throw new Error("Received an invalid response from the AI model.");
+            }
+
+            const text = candidate.content.parts[0].text;
+            
+            // Extract grounding sources
+            let sources = [];
+            const groundingMetadata = candidate.groundingMetadata;
+            if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                sources = groundingMetadata.groundingAttributions
+                    .map(attribution => ({
+                        uri: attribution.web?.uri,
+                        title: attribution.web?.title,
+                    }))
+                    .filter(source => source.uri && source.title);
+            }
+
+            return { text, sources };
+        }
+
+        /**
+         * Main function to handle user input and display the AI response.
+         */
+        async function generateRecommendations() {
+            const disease = inputEl.value.trim();
+            errorMessage.classList.add('hidden');
+            responseContainer.classList.add('hidden');
+            citationContainer.classList.add('hidden');
+            responseContainer.innerHTML = '';
+
+            if (disease.length < 3) {
+                errorMessage.textContent = 'Please enter a valid disease or ailment (at least 3 characters).';
+                errorMessage.classList.remove('hidden');
+                return;
+            }
+
+            // Show loading state
+            loadingIndicator.classList.remove('hidden');
+            submitBtn.disabled = true;
+            inputEl.disabled = true;
+
+            try {
+                const query = `Provide a comprehensive health and diet plan for a patient with: "${disease}"`;
+                const { text, sources } = await callGeminiApi(query);
+
+                // Insert the generated markdown text
+                responseContainer.innerHTML = formatMarkdown(text);
+                responseContainer.classList.remove('hidden');
+
+                // Display citations
+                if (sources.length > 0) {
+                    citationsList.innerHTML = sources.map(source => 
+                        `<li><a href="${source.uri}" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline transition duration-150 ease-in-out">${source.title}</a></li>`
+                    ).join('');
+                    citationContainer.classList.remove('hidden');
+                }
+
+            } catch (error) {
+                console.error("PulseAI Error:", error);
+                errorMessage.textContent = 'An error occurred while fetching the recommendation. Please try again.';
+                errorMessage.classList.remove('hidden');
+            } finally {
+                // Hide loading and re-enable controls
+                loadingIndicator.classList.add('hidden');
+                submitBtn.disabled = false;
+                inputEl.disabled = false;
+            }
+        }
+
+        /**
+         * Simple function to convert basic markdown (like #, *, and lists) to HTML.
+         */
+        function formatMarkdown(markdownText) {
+            let html = markdownText;
+
+            // Headers
+            html = html.replace(/^#\s(.*?)$/gm, '<h3 class="text-xl font-bold mt-4 mb-2 pt-2 border-t border-teal-200 text-teal-700">$1</h3>');
+            html = html.replace(/^##\s(.*?)$/gm, '<h4 class="text-lg font-semibold mt-3 mb-1 text-gray-800">$1</h4>');
+
+            // Bold
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            
+            // Unordered Lists
+            html = html.replace(/^\*\s(.*?)$/gm, '<li class="ml-6 list-disc text-gray-700">$1</li>');
+            html = html.replace(/<li/g, '<ul><li');
+            html = html.replace(/<\/li>/g, '</li></ul>');
+
+            // Clean up list stacking (simple approach)
+            html = html.replace(/<\/ul><ul>/g, '');
+
+            // Ensure paragraphs are handled
+            html = html.split('\n').map(line => {
+                if (line.trim() === '' || line.startsWith('<h') || line.startsWith('<ul')) {
+                    return line;
+                }
+                return `<p class="mb-2 text-gray-700 leading-relaxed">${line}</p>`;
+            }).join('');
+
+            return html;
+        }
+
+        // Initialize the app on window load for better control
+        window.onload = () => {
+             console.log("PulseAI Chatbot Initialized.");
+             responseContainer.innerHTML = `<p class="text-center text-gray-500 py-12">Enter a condition above and click 'Get Plan' to receive your PulseAI health and diet recommendations.</p>`;
+             responseContainer.classList.remove('hidden');
+        };
+
+    </script>
+</body>
+</html>
