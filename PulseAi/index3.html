@@ -484,6 +484,41 @@
         let streamDone = false;
         let currentBotEl = null; // the current bot message content element
         const TYPE_SPEED = 2;
+        let userScrolledUp = false; // track if user manually scrolled up
+
+        // Use wheel & touch events — these ONLY fire from real user interaction,
+        // never from programmatic scrollTop changes or innerHTML reflows.
+        chatContainer.addEventListener('wheel', (e) => {
+            // Scrolling up (negative deltaY) = user wants to read above
+            if (e.deltaY < 0) {
+                userScrolledUp = true;
+            } else {
+                // Scrolling down — check if they've reached the bottom
+                requestAnimationFrame(() => {
+                    const distFromBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight;
+                    if (distFromBottom < 30) {
+                        userScrolledUp = false;
+                    }
+                });
+            }
+        }, { passive: true });
+
+        // Mobile touch support
+        let touchStartY = 0;
+        chatContainer.addEventListener('touchstart', (e) => {
+            touchStartY = e.touches[0].clientY;
+        }, { passive: true });
+        chatContainer.addEventListener('touchmove', (e) => {
+            const deltaY = touchStartY - e.touches[0].clientY;
+            if (deltaY < -10) { // swiping down = scrolling up
+                userScrolledUp = true;
+            } else if (deltaY > 10) {
+                const distFromBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight;
+                if (distFromBottom < 30) {
+                    userScrolledUp = false;
+                }
+            }
+        }, { passive: true });
 
         function typewriterTick() {
             if (charQueue.length === 0) {
@@ -502,14 +537,22 @@
             }
             displayedMarkdown += charQueue.shift();
             if (currentBotEl) {
+                // Save scroll position before innerHTML change to prevent reflow jump
+                const savedScroll = chatContainer.scrollTop;
                 currentBotEl.innerHTML = formatMarkdown(displayedMarkdown);
+                if (userScrolledUp) {
+                    // Restore position so the user stays where they were reading
+                    chatContainer.scrollTop = savedScroll;
+                }
             }
             scrollChatBottom();
             setTimeout(typewriterTick, TYPE_SPEED);
         }
 
         function scrollChatBottom() {
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            if (!userScrolledUp) {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
         }
 
         function enableFollowup() {
@@ -598,6 +641,7 @@
             displayedMarkdown = '';
             streamDone = false;
             isTyping = false;
+            userScrolledUp = false;
             followupBar.classList.remove('visible');
             newChatBtn.classList.remove('visible');
 
@@ -663,6 +707,7 @@
             displayedMarkdown = '';
             streamDone = false;
             isTyping = false;
+            userScrolledUp = false;
 
             // Add bot message bubble
             currentBotEl = addBotMessage();
