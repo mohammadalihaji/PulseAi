@@ -125,12 +125,17 @@ Disease/Condition: {disease}
         try:
             response = MODEL.generate_content(prompt, stream=True)
             for chunk in response:
-                if chunk.text:
-                    # Send each chunk as a Server-Sent Event
-                    yield f"data: {json.dumps({'text': chunk.text})}\n\n"
+                try:
+                    text = chunk.text
+                    if text:
+                        yield f"data: {json.dumps({'text': text})}\n\n"
+                except (ValueError, AttributeError):
+                    # Thinking model chunks may not have .text
+                    pass
             # Signal end of stream
             yield f"data: {json.dumps({'done': True})}\n\n"
         except Exception as e:
+            print(f"❌ Stream error: {e}")
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     return Response(
@@ -175,10 +180,15 @@ def chat_stream():
             chat = MODEL.start_chat(history=history)
             response = chat.send_message(current_message, stream=True)
             for chunk in response:
-                if chunk.text:
-                    yield f"data: {json.dumps({'text': chunk.text})}\n\n"
+                try:
+                    text = chunk.text
+                    if text:
+                        yield f"data: {json.dumps({'text': text})}\n\n"
+                except (ValueError, AttributeError):
+                    pass
             yield f"data: {json.dumps({'done': True})}\n\n"
         except Exception as e:
+            print(f"❌ Chat stream error: {e}")
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     return Response(
@@ -201,4 +211,5 @@ def serve_old():
 
 # ------------------ Main ------------------
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=True, host='0.0.0.0', port=port)
