@@ -91,9 +91,12 @@ def stream_recommendation():
         return jsonify({'error': 'No disease provided'}), 400
 
     disease = data['disease']
+    language = data.get('language', 'English')
 
     prompt = f"""
 You are a helpful AI health assistant named PulseAI.
+
+**IMPORTANT: Respond entirely in {language}.**
 
 Format the response in clean **Markdown** with bold section titles.
 All diet suggestions must be based on **Indian cuisine and Indian food items** only.
@@ -155,6 +158,7 @@ def chat_stream():
         return jsonify({'error': 'No messages provided'}), 400
 
     messages = data['messages']  # [{role: 'user'/'model', text: '...'}]
+    language = data.get('language', 'English')
 
     # Build Gemini chat history
     history = []
@@ -164,7 +168,7 @@ def chat_stream():
             'parts': [{'text': msg['text']}]
         })
 
-    current_message = messages[-1]['text']
+    current_message = f"[Respond in {language}] " + messages[-1]['text']
 
     def generate():
         try:
